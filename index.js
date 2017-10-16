@@ -18,9 +18,34 @@ var Cachet = (function() {
         if (this.domain.length === 0) {
             throw new Error('Domain parameter must be specified as a string.');
         }
-        this.token = (typeof options === 'object') ? (options.token ? options.token : {}) : {};
+        this.apiKey = (typeof options === 'object') ? (options.apiKey ? options.apiKey : {}) : {};
+        this.basic = (typeof options === 'object') ? (options.basic ? options.basic : {}) : {};
     }
 
+    function mergeQueryParams(parameters, queryParameters) {
+        if (parameters.$queryParameters) {
+            Object.keys(parameters.$queryParameters)
+                .forEach(function(parameterName) {
+                    var parameter = parameters.$queryParameters[parameterName];
+                    queryParameters[parameterName] = parameter;
+                });
+        }
+        return queryParameters;
+    }
+
+    /**
+     * HTTP Request
+     * @method
+     * @name Cachet#request
+     * @param {string} method - http method
+     * @param {string} url - url to do request
+     * @param {object} parameters
+     * @param {object} body - body parameters / object
+     * @param {object} headers - header parameters
+     * @param {object} queryParameters - querystring parameters
+     * @param {object} form - form data object
+     * @param {object} deferred - promise object
+     */
     Cachet.prototype.request = function(method, url, parameters, body, headers, queryParameters, form, deferred) {
         var req = {
             method: method,
@@ -64,55 +89,68 @@ var Cachet = (function() {
     };
 
     /**
-     * Set Token
+     * Set Api Key
      * @method
-     * @name Cachet#setToken
-     * @param {string} value - token's value
-     * @param {string} headerOrQueryName - the header or query name to send the token at
-     * @param {boolean} isQuery - true if send the token as query param, otherwise, send as header param
-     *
+     * @name Cachet#setApiKey
+     * @param {string} value - apiKey's value
+     * @param {string} headerOrQueryName - the header or query name to send the apiKey at
+     * @param {boolean} isQuery - true if send the apiKey as query param, otherwise, send as header param
      */
-    Cachet.prototype.setToken = function(value, headerOrQueryName, isQuery) {
-        this.token.value = value;
-        this.token.headerOrQueryName = headerOrQueryName;
-        this.token.isQuery = isQuery;
+    Cachet.prototype.setApiKey = function(value, headerOrQueryName, isQuery) {
+        this.apiKey.value = value;
+        this.apiKey.headerOrQueryName = headerOrQueryName;
+        this.apiKey.isQuery = isQuery;
+    };
+    /**
+     * Set Basic Auth
+     * @method
+     * @name Cachet#setBasicAuth
+     * @param {string} username
+     * @param {string} password
+     */
+    Cachet.prototype.setBasicAuth = function(username, password) {
+        this.basic.username = username;
+        this.basic.password = password;
+    };
+    /**
+     * Set Auth headers
+     * @method
+     * @name Cachet#setAuthHeaders
+     * @param {object} headerParams - headers object
+     */
+    Cachet.prototype.setAuthHeaders = function(headerParams) {
+        var headers = headerParams ? headerParams : {};
+        if (!this.apiKey.isQuery && this.apiKey.headerOrQueryName) {
+            headers[this.apiKey.headerOrQueryName] = this.apiKey.value;
+        }
+        if (this.basic.username && this.basic.password) {
+            headers['Authorization'] = 'Basic ' + new Buffer(this.basic.username + ':' + this.basic.password).toString("base64");
+        }
+        return headers;
     };
 
     /**
      * Test that the API is responding to your requests.
      * @method
      * @name Cachet#ping
-     * 
+     * @param {object} parameters - method options and parameters
      */
     Cachet.prototype.ping = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/ping';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/ping';
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -122,37 +160,24 @@ var Cachet = (function() {
      * Get the Cachet version.
      * @method
      * @name Cachet#version
-     * 
+     * @param {object} parameters - method options and parameters
      */
     Cachet.prototype.version = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/version';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/version';
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
-
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -162,42 +187,41 @@ var Cachet = (function() {
      * Get all components.
      * @method
      * @name Cachet#getComponents
-     * @param {string} sort - Object property to filter on.
-     * @param {string} order - Ordering parameter with options of asc or desc.
-     * @param {number} perPage - Results per page.
-     * @param {number} page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
-     * @param {number} id - Unique identifier representing a specific component.
-     * @param {string} name - Full name or partial name to search for a component.
-     * @param {number} status - Unique status identifier representing a specific component status.
-     * @param {number} groupId - Unique group identifier representing a specific component group.
-     * @param {boolean} enabled - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.sort - Object property to filter on.
+     * @param {string} parameters.order - Ordering parameter with options of asc or desc.
+     * @param {number} parameters.perPage - Results per page.
+     * @param {number} parameters.page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
+     * @param {number} parameters.id - Unique identifier representing a specific component.
+     * @param {string} parameters.name - Full name or partial name to search for a component.
+     * @param {number} parameters.status - Unique status identifier representing a specific component status.
+     * @param {number} parameters.groupId - Unique group identifier representing a specific component group.
+     * @param {boolean} parameters.enabled - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
      */
     Cachet.prototype.getComponents = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components';
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        /** set default value **/
+        queryParameters['sort'] = id;
 
         if (parameters['sort'] !== undefined) {
             queryParameters['sort'] = parameters['sort'];
         }
+
+        /** set default value **/
+        queryParameters['order'] = asc;
 
         if (parameters['order'] !== undefined) {
             queryParameters['order'] = parameters['order'];
@@ -231,13 +255,7 @@ var Cachet = (function() {
             queryParameters['enabled'] = parameters['enabled'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -247,30 +265,23 @@ var Cachet = (function() {
      * Create a new component.
      * @method
      * @name Cachet#createComponent
-     * @param {} body - Component to be created.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.body - Component to be created.
      */
     Cachet.prototype.createComponent = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         if (parameters['body'] !== undefined) {
             body = parameters['body'];
@@ -281,13 +292,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -297,30 +302,23 @@ var Cachet = (function() {
      * Get a component.
      * @method
      * @name Cachet#getComponentById
-     * @param {number} component - Unique component identifier.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.component - Unique component identifier.
      */
     Cachet.prototype.getComponentById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components/{component}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components/{component}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{component}', parameters['component']);
 
@@ -329,13 +327,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -345,31 +337,24 @@ var Cachet = (function() {
      * Update a compoonent.
      * @method
      * @name Cachet#updateComponentById
-     * @param {number} component - Unique component identifier.
-     * @param {} body - Component data to be updated
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.component - Unique component identifier.
+     * @param {} parameters.body - Component data to be updated
      */
     Cachet.prototype.updateComponentById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components/{component}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components/{component}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{component}', parameters['component']);
 
@@ -387,13 +372,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('PUT', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -403,30 +382,23 @@ var Cachet = (function() {
      * Delete a component.
      * @method
      * @name Cachet#deleteComponentById
-     * @param {number} component - Unique component identifier.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.component - Unique component identifier.
      */
     Cachet.prototype.deleteComponentById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components/{component}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components/{component}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{component}', parameters['component']);
 
@@ -435,13 +407,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('DELETE', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -451,36 +417,29 @@ var Cachet = (function() {
      * Get all Component Groups.
      * @method
      * @name Cachet#getComponentGroups
-     * @param {number} id - Unique component group id
-     * @param {string} name - Full or partial component group name
-     * @param {number} collapsed - Group collapsed or not.
-     * @param {string} sort - Object property to filter on.
-     * @param {string} order - Ordering parameter with options of asc or desc.
-     * @param {number} perPage - Results per page.
-     * @param {number} page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.id - Unique component group id
+     * @param {string} parameters.name - Full or partial component group name
+     * @param {number} parameters.collapsed - Group collapsed or not.
+     * @param {string} parameters.sort - Object property to filter on.
+     * @param {string} parameters.order - Ordering parameter with options of asc or desc.
+     * @param {number} parameters.perPage - Results per page.
+     * @param {number} parameters.page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
      */
     Cachet.prototype.getComponentGroups = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components/groups';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components/groups';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         if (parameters['id'] !== undefined) {
             queryParameters['id'] = parameters['id'];
@@ -494,9 +453,15 @@ var Cachet = (function() {
             queryParameters['collapsed'] = parameters['collapsed'];
         }
 
+        /** set default value **/
+        queryParameters['sort'] = id;
+
         if (parameters['sort'] !== undefined) {
             queryParameters['sort'] = parameters['sort'];
         }
+
+        /** set default value **/
+        queryParameters['order'] = asc;
 
         if (parameters['order'] !== undefined) {
             queryParameters['order'] = parameters['order'];
@@ -510,13 +475,7 @@ var Cachet = (function() {
             queryParameters['page'] = parameters['page'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -526,30 +485,23 @@ var Cachet = (function() {
      * Create a new Component Group.
      * @method
      * @name Cachet#createComponentGroup
-     * @param {} body - Component Group to be created.
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.body - Component Group to be created.
      */
     Cachet.prototype.createComponentGroup = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components/groups';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components/groups';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         if (parameters['body'] !== undefined) {
             body = parameters['body'];
@@ -560,13 +512,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -576,30 +522,23 @@ var Cachet = (function() {
      * Get a Component Group.
      * @method
      * @name Cachet#getComponentGroupById
-     * @param {number} group - Unique component group id
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.group - Unique component group id
      */
     Cachet.prototype.getComponentGroupById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components/groups/{group}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components/groups/{group}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{group}', parameters['group']);
 
@@ -608,13 +547,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -624,31 +557,24 @@ var Cachet = (function() {
      * Update a Component Group.
      * @method
      * @name Cachet#updateComponentGroupById
-     * @param {number} group - Unique component group id
-     * @param {} body - Component Group data to be updated
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.group - Unique component group id
+     * @param {} parameters.body - Component Group data to be updated
      */
     Cachet.prototype.updateComponentGroupById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components/groups/{group}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components/groups/{group}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{group}', parameters['group']);
 
@@ -666,13 +592,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('PUT', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -682,30 +602,23 @@ var Cachet = (function() {
      * Delete a Component Group.
      * @method
      * @name Cachet#deleteComponentGroupById
-     * @param {number} group - Unique component group id
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.group - Unique component group id
      */
     Cachet.prototype.deleteComponentGroupById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/components/groups/{group}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/components/groups/{group}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{group}', parameters['group']);
 
@@ -714,13 +627,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('DELETE', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -730,38 +637,31 @@ var Cachet = (function() {
      * Get all incidents.
      * @method
      * @name Cachet#getIncidents
-     * @param {number} id - Unique incident id
-     * @param {number} componentId - Unique component group id
-     * @param {string} name - Full or partial component group name
-     * @param {number} status - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
-     * @param {number} visible - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
-     * @param {string} sort - Object property to filter on.
-     * @param {string} order - Ordering parameter with options of asc or desc.
-     * @param {number} perPage - Results per page.
-     * @param {number} page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.id - Unique incident id
+     * @param {number} parameters.componentId - Unique component group id
+     * @param {string} parameters.name - Full or partial component group name
+     * @param {number} parameters.status - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
+     * @param {number} parameters.visible - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
+     * @param {string} parameters.sort - Object property to filter on.
+     * @param {string} parameters.order - Ordering parameter with options of asc or desc.
+     * @param {number} parameters.perPage - Results per page.
+     * @param {number} parameters.page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
      */
     Cachet.prototype.getIncidents = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/incidents';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         if (parameters['id'] !== undefined) {
             queryParameters['id'] = parameters['id'];
@@ -783,9 +683,15 @@ var Cachet = (function() {
             queryParameters['visible'] = parameters['visible'];
         }
 
+        /** set default value **/
+        queryParameters['sort'] = id;
+
         if (parameters['sort'] !== undefined) {
             queryParameters['sort'] = parameters['sort'];
         }
+
+        /** set default value **/
+        queryParameters['order'] = asc;
 
         if (parameters['order'] !== undefined) {
             queryParameters['order'] = parameters['order'];
@@ -799,13 +705,7 @@ var Cachet = (function() {
             queryParameters['page'] = parameters['page'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -815,30 +715,23 @@ var Cachet = (function() {
      * Create a new incident.
      * @method
      * @name Cachet#createIncident
-     * @param {} body - Incident to be created
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.body - Incident to be created
      */
     Cachet.prototype.createIncident = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/incidents';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         if (parameters['body'] !== undefined) {
             body = parameters['body'];
@@ -849,13 +742,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -865,30 +752,23 @@ var Cachet = (function() {
      * Get an incident
      * @method
      * @name Cachet#getIncidentById
-     * @param {number} incident - Unique incident id
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.incident - Unique incident id
      */
     Cachet.prototype.getIncidentById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents/{incident}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/incidents/{incident}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{incident}', parameters['incident']);
 
@@ -897,13 +777,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -913,31 +787,24 @@ var Cachet = (function() {
      * Update an incident
      * @method
      * @name Cachet#updateIncidentById
-     * @param {number} incident - Unique incident id
-     * @param {} body - Incident data to be updated
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.incident - Unique incident id
+     * @param {} parameters.body - Incident data to be updated
      */
     Cachet.prototype.updateIncidentById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents/{incident}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/incidents/{incident}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{incident}', parameters['incident']);
 
@@ -955,13 +822,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('PUT', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -971,30 +832,23 @@ var Cachet = (function() {
      * Delete an incident
      * @method
      * @name Cachet#deleteIncidentById
-     * @param {number} incident - Unique incident id
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.incident - Unique incident id
      */
     Cachet.prototype.deleteIncidentById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents/{incident}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/incidents/{incident}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{incident}', parameters['incident']);
 
@@ -1003,13 +857,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('DELETE', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -1019,34 +867,27 @@ var Cachet = (function() {
      * Get incident updates
      * @method
      * @name Cachet#getIncidentUpdatesById
-     * @param {number} incident - Unique incident id
-     * @param {string} sort - Object property to filter on.
-     * @param {string} order - Ordering parameter with options of asc or desc.
-     * @param {number} perPage - Results per page.
-     * @param {number} page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.incident - Unique incident id
+     * @param {string} parameters.sort - Object property to filter on.
+     * @param {string} parameters.order - Ordering parameter with options of asc or desc.
+     * @param {number} parameters.perPage - Results per page.
+     * @param {number} parameters.page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
      */
     Cachet.prototype.getIncidentUpdatesById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents/{incident}/updates';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/incidents/{incident}/updates';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{incident}', parameters['incident']);
 
@@ -1055,9 +896,15 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
+        /** set default value **/
+        queryParameters['sort'] = id;
+
         if (parameters['sort'] !== undefined) {
             queryParameters['sort'] = parameters['sort'];
         }
+
+        /** set default value **/
+        queryParameters['order'] = asc;
 
         if (parameters['order'] !== undefined) {
             queryParameters['order'] = parameters['order'];
@@ -1071,15 +918,54 @@ var Cachet = (function() {
             queryParameters['page'] = parameters['page'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
+
+        return deferred.promise;
+    };
+    /**
+     * Create an Incident Update
+     * @method
+     * @name Cachet#createIncidentUpdate
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.incident - Unique incident id
+     * @param {} parameters.body - Incident update to create
+     */
+    Cachet.prototype.createIncidentUpdate = function(parameters) {
+        if (parameters === undefined) {
+            parameters = {};
+        }
+        var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents/{incident}/updates';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
+
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
+
+        path = path.replace('{incident}', parameters['incident']);
+
+        if (parameters['incident'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: incident'));
+            return deferred.promise;
+        }
+
+        if (parameters['body'] !== undefined) {
+            body = parameters['body'];
+        }
+
+        if (parameters['body'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: body'));
+            return deferred.promise;
+        }
+
+        queryParameters = mergeQueryParams(parameters, queryParameters);
+
+        this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
@@ -1087,31 +973,24 @@ var Cachet = (function() {
      * Get an incident update
      * @method
      * @name Cachet#getIncidentUpdateById
-     * @param {number} incident - Unique incident id
-     * @param {number} update - Unique incident update id
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.incident - Unique incident id
+     * @param {number} parameters.update - Unique incident update id
      */
     Cachet.prototype.getIncidentUpdateById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents/{incident}/updates/{update}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/incidents/{incident}/updates/{update}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{incident}', parameters['incident']);
 
@@ -1127,15 +1006,105 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
+
+        return deferred.promise;
+    };
+    /**
+     * Update an incident update
+     * @method
+     * @name Cachet#putIncidentUpdateById
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.incident - Unique incident id
+     * @param {number} parameters.update - Unique incident update id
+     * @param {number} parameters.status - The incident status flag
+     * @param {string} parameters.message - The update message
+     */
+    Cachet.prototype.putIncidentUpdateById = function(parameters) {
+        if (parameters === undefined) {
+            parameters = {};
+        }
+        var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents/{incident}/updates/{update}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
+
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
+
+        path = path.replace('{incident}', parameters['incident']);
+
+        if (parameters['incident'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: incident'));
+            return deferred.promise;
+        }
+
+        path = path.replace('{update}', parameters['update']);
+
+        if (parameters['update'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: update'));
+            return deferred.promise;
+        }
+
+        if (parameters['status'] !== undefined) {
+            queryParameters['status'] = parameters['status'];
+        }
+
+        if (parameters['message'] !== undefined) {
+            queryParameters['message'] = parameters['message'];
+        }
+
+        queryParameters = mergeQueryParams(parameters, queryParameters);
+
+        this.request('PUT', domain + path, parameters, body, headers, queryParameters, form, deferred);
+
+        return deferred.promise;
+    };
+    /**
+     * Delete an incident update
+     * @method
+     * @name Cachet#deleteIncidentUpdateById
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.incident - Unique incident id
+     * @param {number} parameters.update - Unique incident update id
+     */
+    Cachet.prototype.deleteIncidentUpdateById = function(parameters) {
+        if (parameters === undefined) {
+            parameters = {};
+        }
+        var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/incidents/{incident}/updates/{update}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
+
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
+
+        path = path.replace('{incident}', parameters['incident']);
+
+        if (parameters['incident'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: incident'));
+            return deferred.promise;
+        }
+
+        path = path.replace('{update}', parameters['update']);
+
+        if (parameters['update'] === undefined) {
+            deferred.reject(new Error('Missing required  parameter: update'));
+            return deferred.promise;
+        }
+
+        queryParameters = mergeQueryParams(parameters, queryParameters);
+
+        this.request('DELETE', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
         return deferred.promise;
     };
@@ -1143,37 +1112,36 @@ var Cachet = (function() {
      * Get all metrics
      * @method
      * @name Cachet#getMetrics
-     * @param {string} sort - Object property to filter on.
-     * @param {string} order - Ordering parameter with options of asc or desc.
-     * @param {number} perPage - Results per page.
-     * @param {number} page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {string} parameters.sort - Object property to filter on.
+     * @param {string} parameters.order - Ordering parameter with options of asc or desc.
+     * @param {number} parameters.perPage - Results per page.
+     * @param {number} parameters.page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
      */
     Cachet.prototype.getMetrics = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/metrics';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/metrics';
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        /** set default value **/
+        queryParameters['sort'] = id;
 
         if (parameters['sort'] !== undefined) {
             queryParameters['sort'] = parameters['sort'];
         }
+
+        /** set default value **/
+        queryParameters['order'] = asc;
 
         if (parameters['order'] !== undefined) {
             queryParameters['order'] = parameters['order'];
@@ -1187,13 +1155,7 @@ var Cachet = (function() {
             queryParameters['page'] = parameters['page'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -1203,30 +1165,23 @@ var Cachet = (function() {
      * Create a metric
      * @method
      * @name Cachet#createMetric
-     * @param {} body - Create metric data
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {} parameters.body - Create metric data
      */
     Cachet.prototype.createMetric = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/metrics';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/metrics';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         if (parameters['body'] !== undefined) {
             body = parameters['body'];
@@ -1237,13 +1192,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -1253,30 +1202,23 @@ var Cachet = (function() {
      * Get a metric
      * @method
      * @name Cachet#getMetricById
-     * @param {number} metric - Unique metric id
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.metric - Unique metric id
      */
     Cachet.prototype.getMetricById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/metrics/{metric}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/metrics/{metric}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{metric}', parameters['metric']);
 
@@ -1285,13 +1227,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -1301,30 +1237,23 @@ var Cachet = (function() {
      * Delete a metric
      * @method
      * @name Cachet#deleteMetricById
-     * @param {number} metric - Unique metric id
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.metric - Unique metric id
      */
     Cachet.prototype.deleteMetricById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/metrics/{metric}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/metrics/{metric}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{metric}', parameters['metric']);
 
@@ -1333,13 +1262,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('DELETE', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -1349,34 +1272,27 @@ var Cachet = (function() {
      * Get points for a metric
      * @method
      * @name Cachet#getMetricPointsById
-     * @param {number} metric - Unique metric id
-     * @param {string} sort - Object property to filter on.
-     * @param {string} order - Ordering parameter with options of asc or desc.
-     * @param {number} perPage - Results per page.
-     * @param {number} page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.metric - Unique metric id
+     * @param {string} parameters.sort - Object property to filter on.
+     * @param {string} parameters.order - Ordering parameter with options of asc or desc.
+     * @param {number} parameters.perPage - Results per page.
+     * @param {number} parameters.page - A swagger documentation file based on the documentation for the Cachet Status Page https://cachethq.io/
      */
     Cachet.prototype.getMetricPointsById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/metrics/{metric}/points';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/metrics/{metric}/points';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{metric}', parameters['metric']);
 
@@ -1385,9 +1301,15 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
+        /** set default value **/
+        queryParameters['sort'] = id;
+
         if (parameters['sort'] !== undefined) {
             queryParameters['sort'] = parameters['sort'];
         }
+
+        /** set default value **/
+        queryParameters['order'] = asc;
 
         if (parameters['order'] !== undefined) {
             queryParameters['order'] = parameters['order'];
@@ -1401,13 +1323,7 @@ var Cachet = (function() {
             queryParameters['page'] = parameters['page'];
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('GET', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -1417,31 +1333,24 @@ var Cachet = (function() {
      * Create point for a metric
      * @method
      * @name Cachet#createMetricPointById
-     * @param {number} metric - Unique metric id
-     * @param {} body - Metric data
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.metric - Unique metric id
+     * @param {} parameters.body - Metric data
      */
     Cachet.prototype.createMetricPointById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/metrics/{metric}/points';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/metrics/{metric}/points';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{metric}', parameters['metric']);
 
@@ -1459,13 +1368,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('POST', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
@@ -1475,31 +1378,24 @@ var Cachet = (function() {
      * Delete a metric point
      * @method
      * @name Cachet#deleteMetricPointById
-     * @param {number} metric - Unique metric id
-     * @param {number} point - Unique metric point id
-     * 
+     * @param {object} parameters - method options and parameters
+     * @param {number} parameters.metric - Unique metric id
+     * @param {number} parameters.point - Unique metric point id
      */
     Cachet.prototype.deleteMetricPointById = function(parameters) {
         if (parameters === undefined) {
             parameters = {};
         }
         var deferred = Q.defer();
+        var domain = this.domain,
+            path = '/metrics/{metric}/points/{point}';
+        var body = {},
+            queryParameters = {},
+            headers = {},
+            form = {};
 
-        var domain = this.domain;
-        var path = '/metrics/{metric}/points/{point}';
-
-        var body;
-        var queryParameters = {};
-        var headers = {};
-        var form = {};
-
-        if (this.token.isQuery) {
-            queryParameters[this.token.headerOrQueryName] = this.token.value;
-        } else if (this.token.headerOrQueryName) {
-            headers[this.token.headerOrQueryName] = this.token.value;
-        } else {
-            headers['Authorization'] = 'Bearer ' + this.token.value;
-        }
+        headers = this.setAuthHeaders(headers);
+        headers['Accept'] = ['application/json'];
 
         path = path.replace('{metric}', parameters['metric']);
 
@@ -1515,13 +1411,7 @@ var Cachet = (function() {
             return deferred.promise;
         }
 
-        if (parameters.$queryParameters) {
-            Object.keys(parameters.$queryParameters)
-                .forEach(function(parameterName) {
-                    var parameter = parameters.$queryParameters[parameterName];
-                    queryParameters[parameterName] = parameter;
-                });
-        }
+        queryParameters = mergeQueryParams(parameters, queryParameters);
 
         this.request('DELETE', domain + path, parameters, body, headers, queryParameters, form, deferred);
 
