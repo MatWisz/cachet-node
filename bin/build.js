@@ -12,9 +12,9 @@ const req = request.defaults({
   json: true
 });
 
-req('https://api.github.com/repos/mwillbanks/cachet-swagger/releases/latest', (err, data, body) => {
+req('https://api.github.com/repos/MatWisz/cachet-swagger/releases/latest', (err, data, body) => {
   const version = body.name;
-  req('https://raw.githubusercontent.com/mwillbanks/cachet-swagger/' + version + '/swagger.yaml', (err, data, body) => {
+  req('https://raw.githubusercontent.com/MatWisz/cachet-swagger/' + version + '/swagger.yaml', (err, data, body) => {
     const swagger = yamljs.parse(body);
     const api = CodeGen.getNodeCode({ className: 'Cachet', swagger: swagger });
 
